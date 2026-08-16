@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# TypeScript & Build output
+dist/
+build/
+*.tsbuildinfo
+
+# IdeaGit-specific runtime & evaluation data
+.ideagit-phase0/
+.decisions/.pending/
+.ideagit/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+PRD.md
+ROADMAP.md
+ARCHITECTURE.md
+
+BETA_READINESS_ASSESSMENT.md
+BETA_TESTING.md
+CLAUDE.md
+CONTRIBUTING.md
+ROADMAP.md
