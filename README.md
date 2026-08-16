@@ -106,15 +106,5 @@ Each record contains:
 
 The files remain useful Markdown even if IdeaGit is removed.
 
-## Validation path
-
-Read these in order:
-
-1. [PRD.md](PRD.md) - product thesis, target user, metrics, and kill criteria
-2. [ROADMAP.md](ROADMAP.md) - validation gates and build order
-3. [ARCHITECTURE.md](ARCHITECTURE.md) - storage, MCP surface, trust model, and future design
-4. [PRIVACY.md](PRIVACY.md) - what auto-capture sends, where it goes, and how to delete it
-5. [CLAUDE.md](CLAUDE.md) - condensed context and commands for a coding agent working in this repo
-
 The immediate goal is not to build a graph or hosted service. It is to prove
 that an agent recalls a prior decision and changes its behavior because of it.
