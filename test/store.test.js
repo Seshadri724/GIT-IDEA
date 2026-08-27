@@ -18,6 +18,7 @@ test('record + read round-trips all fields', async () => {
       rejected: [{ name: 'Redis', reason: 'Second datastore to operate with no on-call rotation.' }],
       changes_mind: 'Session volume above ~50k concurrent.',
       scope: ['src/session/**'],
+      tags: ['auth', 'session', 'database'],
     });
 
     assert.match(id, /^\d{4}-\d{2}-\d{2}-keep-sessions-in-postgres/);
@@ -30,6 +31,7 @@ test('record + read round-trips all fields', async () => {
     assert.equal(d.why, 'Operational surface area outweighs the latency win at our traffic.');
     assert.equal(d.changes_mind, 'Session volume above ~50k concurrent.');
     assert.deepEqual(d.scope, ['src/session/**']);
+    assert.deepEqual(d.tags, ['auth', 'session', 'database']);
     assert.equal(d.rejected.length, 1);
     assert.equal(d.rejected[0].name, 'Redis');
     assert.equal(d.rejected[0].reason, 'Second datastore to operate with no on-call rotation.');

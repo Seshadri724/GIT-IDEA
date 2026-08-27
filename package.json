@@ -12,6 +12,8 @@
     "start": "node dist/server.js",
     "test": "npm run build && node --test test/*.test.js",
     "review": "node bin/ideagit.js review",
+    "rules": "node bin/ideagit.js rules",
+    "prepublishOnly": "npm test",
     "dev": "tsc -p tsconfig.json --watch"
   },
   "files": [

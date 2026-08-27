@@ -1,32 +1,34 @@
-// IdeaGit MCP server: two tools over stdio, backed by .decisions/ in the
-// current working directory. See ARCHITECTURE.md §5 for the tool contracts.
+// IdeaGit MCP server: three tools over stdio, backed by .decisions/ in the
+// target repository directory. See ARCHITECTURE.md §5 for the tool contracts.
 
 import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { recordDecision, Decision } from './store.js';
 import { searchDecisions } from './search.js';
+import { checkProposal } from './proposal.js';
 
-const cwd = process.cwd();
+export function getTargetCwd(explicitPath?: string): string {
+  return explicitPath || process.env.IDEAGIT_CWD || process.env.IDEAGIT_DIR || process.cwd();
+}
 
-const INSTRUCTIONS = `Before proposing a change to architecture, dependencies, data storage, or
-project structure, call search_decisions with a description of the change.
-If a prior decision conflicts, show the decision, its date and scope, and raise
-the conflict with the user before proceeding. Do not silently treat a search
+const INSTRUCTIONS = `Before proposing a change to architecture, dependencies, data storage, API design, or
+project structure, you MUST call check_proposal or search_decisions with the topic or technology you plan to introduce.
+If a prior decision conflicts, show the decision, its date, reasoning, and scope, and raise
+the conflict with the user before writing code or changing plans. Do not silently treat a search
 miss as approval.
 
-When a result is related but not contradictory, say that it is related. When a
-result is stale or superseded, say so clearly rather than presenting it as a
-current constraint.
+When a result is related but not contradictory, mention that it is related context. When a
+result is stale or superseded, state that clearly rather than presenting it as a current constraint.
 
-After a session where a real structural decision was made — a choice between
-real alternatives that someone could plausibly propose again — call
-record_decision to save it. Skip routine implementation details and anything
-with no alternative that was actually considered.`;
+After a session where a real structural technical decision was made — a choice between
+real alternatives that someone could plausibly propose again — call record_decision to persist it.
+Skip routine bug fixes, trivial refactors, and anything where no viable alternative was considered.`;
 
 function formatDecision(d: Decision): string {
   const lines = [`# ${d.title}`, ``, `id: ${d.id}  ·  status: ${d.status}  ·  date: ${d.date}`];
   if (d.scope.length) lines.push(`scope: ${d.scope.join(', ')}`);
+  if (d.tags.length) lines.push(`tags: ${d.tags.join(', ')}`);
   if (d.superseded_by) lines.push(`superseded by: ${d.superseded_by}`);
   if (d.provenance) {
     const provParts: string[] = [];
@@ -52,6 +54,36 @@ serveStdio(() => {
   );
 
   server.registerTool(
+    'check_proposal',
+    {
+      description:
+        'Check a proposed architectural, dependency, or structural change against recorded decisions. ' +
+        'Returns whether the change CONFLICTS with a prior rejected alternative, is RELATED to an existing decision, or has NONE.',
+      inputSchema: z.object({
+        proposal: z.string().describe('The proposed architectural change, library, or design you plan to introduce.'),
+        scope: z.string().optional().describe('Optional file path being modified.'),
+        repo_path: z
+          .string()
+          .optional()
+          .describe('Optional repository root directory. Defaults to current working directory or IDEAGIT_CWD.'),
+      }),
+    },
+    async (input) => {
+      const { repo_path, ...opts } = input;
+      const cwd = getTargetCwd(repo_path);
+      const result = await checkProposal(cwd, opts);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Verdict: ${result.verdict.toUpperCase()}\n\n${result.explanation}`,
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
     'record_decision',
     {
       description:
@@ -74,6 +106,10 @@ serveStdio(() => {
           .array(z.string())
           .optional()
           .describe('Glob patterns for the files this decision governs, e.g. ["src/session/**"].'),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe('Tags for categorizing and discovering decisions, e.g. ["database", "auth"].'),
         supersedes: z
           .array(z.string())
           .optional()
@@ -86,10 +122,16 @@ serveStdio(() => {
           })
           .optional()
           .describe('Session ID, git commit, or source link for evidence.'),
+        repo_path: z
+          .string()
+          .optional()
+          .describe('Optional repository root directory. Defaults to current working directory or IDEAGIT_CWD.'),
       }),
     },
     async (input) => {
-      const id = await recordDecision(cwd, input);
+      const { repo_path, ...data } = input;
+      const cwd = getTargetCwd(repo_path);
+      const id = await recordDecision(cwd, data);
       return { content: [{ type: 'text', text: `Recorded decision ${id}` }] };
     },
   );
@@ -102,7 +144,7 @@ serveStdio(() => {
         'Returns matching decisions with their full reasoning so you can check whether the change was already ' +
         'considered and rejected.',
       inputSchema: z.object({
-        query: z.string().describe('What you are about to propose or want to check against — free text.'),
+        query: z.string().describe('What you are about to propose or want to check against — free text or keywords.'),
         status: z
           .enum(['active', 'superseded', 'abandoned', 'stale', 'any'])
           .optional()
@@ -111,10 +153,16 @@ serveStdio(() => {
           .string()
           .optional()
           .describe('A file path — restrict to decisions whose scope glob matches it.'),
+        repo_path: z
+          .string()
+          .optional()
+          .describe('Optional repository root directory. Defaults to current working directory or IDEAGIT_CWD.'),
       }),
     },
     async (input) => {
-      const results = await searchDecisions(cwd, input);
+      const { repo_path, ...opts } = input;
+      const cwd = getTargetCwd(repo_path);
+      const results = await searchDecisions(cwd, opts);
 
       if (results.length === 0) {
         return { content: [{ type: 'text', text: 'No matching decisions found.' }] };

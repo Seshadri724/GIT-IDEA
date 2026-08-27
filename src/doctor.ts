@@ -1,13 +1,9 @@
 // Diagnostics and lifecycle checks for .decisions/*.md records.
-// Implements ROADMAP.md Phase 4 & PRD.md R9, R11 & ARCHITECTURE.md §8.
+// Validates file integrity, references, scopes, and real semantic contradictions.
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { listDecisions, Decision } from './store.js';
-
-const execFileAsync = promisify(execFile);
 
 export interface DoctorIssue {
   severity: 'error' | 'warning' | 'info';
@@ -34,7 +30,11 @@ async function getRepoFiles(dir: string, baseDir: string = dir): Promise<string[
   const files: string[] = [];
 
   for (const entry of entries) {
-    if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist' || entry.name === '.decisions') {
+    if (
+      entry.name === 'node_modules' ||
+      entry.name === '.git' ||
+      entry.name === 'dist'
+    ) {
       continue;
     }
     const fullPath = path.join(dir, entry.name);
@@ -50,20 +50,52 @@ async function getRepoFiles(dir: string, baseDir: string = dir): Promise<string[
   return files;
 }
 
-async function getFileLastModifiedTime(cwd: string, relFile: string): Promise<number | null> {
-  try {
-    const { stdout } = await execFileAsync('git', ['log', '-1', '--format=%ct', '--', relFile], { cwd });
-    const seconds = parseInt(stdout.trim(), 10);
-    if (!isNaN(seconds) && seconds > 0) {
-      return seconds * 1000;
+function getTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9_-]+/)
+    .filter((w) => w.length >= 3);
+}
+
+function hasWholeTokenOverlap(targetTokens: string[], candidateTokens: string[]): boolean {
+  if (candidateTokens.length === 0) return false;
+  // All tokens in candidate (e.g. "redis cluster") must appear as whole tokens in target
+  return candidateTokens.every((c) => targetTokens.includes(c));
+}
+
+/**
+ * Checks if decision B contradicts decision A.
+ * A contradiction occurs when Decision A explicitly rejected what Decision B chose (or vice versa).
+ */
+function isContradiction(a: Decision, b: Decision): string | null {
+  const bChoseTokens = getTokens(b.chose);
+  const bTitleTokens = getTokens(b.title);
+  const aChoseTokens = getTokens(a.chose);
+  const aTitleTokens = getTokens(a.title);
+
+  // Check if A's rejected list contains B's chosen option
+  for (const r of a.rejected) {
+    const rTokens = getTokens(r.name);
+    if (
+      rTokens.length > 0 &&
+      (hasWholeTokenOverlap(bChoseTokens, rTokens) || hasWholeTokenOverlap(bTitleTokens, rTokens))
+    ) {
+      return `Active decision '${a.id}' explicitly rejected '${r.name}', but active decision '${b.id}' chose it without a supersedes link.`;
     }
-  } catch {
-    // Git command failed or not a git repository; fall back to fs stat
   }
 
-  const fullPath = path.join(cwd, relFile);
-  const stat = await fs.stat(fullPath).catch(() => null);
-  return stat ? stat.mtimeMs : null;
+  // Check if B's rejected list contains A's chosen option
+  for (const r of b.rejected) {
+    const rTokens = getTokens(r.name);
+    if (
+      rTokens.length > 0 &&
+      (hasWholeTokenOverlap(aChoseTokens, rTokens) || hasWholeTokenOverlap(aTitleTokens, rTokens))
+    ) {
+      return `Active decision '${b.id}' explicitly rejected '${r.name}', but active decision '${a.id}' chose it without a supersedes link.`;
+    }
+  }
+
+  return null;
 }
 
 export async function runDoctor(cwd: string): Promise<DoctorReport> {
@@ -73,7 +105,7 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
   const decisionIds = new Set(decisions.map((d) => d.id));
 
   for (const d of decisions) {
-    // 1. Structure validation
+    // 1. Structure validation (hard errors)
     if (!d.title.trim()) {
       issues.push({ severity: 'error', decisionId: d.id, message: 'Missing title' });
     }
@@ -89,7 +121,7 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
       issues.push({ severity: 'error', decisionId: d.id, message: `Invalid status '${d.status}'` });
     }
 
-    // 2. Dangling reference checks
+    // 2. Dangling reference checks (hard errors)
     for (const oldId of d.supersedes) {
       if (!decisionIds.has(oldId)) {
         issues.push({
@@ -116,10 +148,16 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
       });
     }
 
-    // 3. Scope & Git staleness checks
-    if (d.scope.length > 0) {
-      const decisionTime = new Date(d.date).getTime();
+    if (d.status === 'stale') {
+      issues.push({
+        severity: 'info',
+        decisionId: d.id,
+        message: 'Decision is explicitly marked stale and should be reviewed or superseded.',
+      });
+    }
 
+    // 3. Scope checks (warnings)
+    if (d.scope.length > 0) {
       for (const pattern of d.scope) {
         const regex = globToRegExp(pattern);
         const matchedFiles = repoFiles.filter((f) => regex.test(f));
@@ -130,24 +168,12 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
             decisionId: d.id,
             message: `Scope pattern '${pattern}' matches no files in repository`,
           });
-        } else {
-          for (const relFile of matchedFiles) {
-            const lastModTime = await getFileLastModifiedTime(cwd, relFile);
-            if (lastModTime && lastModTime > decisionTime + 86400000) {
-              // modified >24h after decision date
-              issues.push({
-                severity: 'warning',
-                decisionId: d.id,
-                message: `Governed file '${relFile}' modified after decision date (${d.date}); record may be stale`,
-              });
-            }
-          }
         }
       }
     }
   }
 
-  // 4. Contradiction checks among active decisions
+  // 4. Contradiction checks among active decisions (warnings, not CI hard errors)
   const activeDecisions = decisions.filter((d) => d.status === 'active');
   for (let i = 0; i < activeDecisions.length; i++) {
     for (let j = i + 1; j < activeDecisions.length; j++) {
@@ -158,13 +184,12 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
       if (a.supersedes.includes(b.id) || b.supersedes.includes(a.id)) continue;
       if (a.superseded_by === b.id || b.superseded_by === a.id) continue;
 
-      // Check for overlapping scope patterns
-      const overlappingScopes = a.scope.filter((sA) => b.scope.includes(sA));
-      if (overlappingScopes.length > 0) {
+      const contradictionMessage = isContradiction(a, b);
+      if (contradictionMessage) {
         issues.push({
-          severity: 'error',
+          severity: 'warning',
           decisionId: a.id,
-          message: `Contradiction detected: active decision '${a.id}' conflicts with '${b.id}' over overlapping scope [${overlappingScopes.join(', ')}]. Neither supersedes the other.`,
+          message: `Contradiction suspected: ${contradictionMessage}`,
         });
       }
     }

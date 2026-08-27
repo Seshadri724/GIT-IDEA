@@ -1,10 +1,10 @@
 # IdeaGit
 
-**A contradiction detector and decision memory for coding agents.**
+**Decision memory and contradiction checker for coding agents.**
 
 IdeaGit stores important technical decisions as Markdown inside your repository
-and tells an MCP-capable coding agent to check them before proposing structural
-changes.
+and gives your MCP-capable coding agent tools to search prior decisions and check
+new proposals before suggesting architectural changes.
 
 The product is not an ADR generator. The useful event is this:
 
@@ -24,25 +24,23 @@ disk.
 
 ## Current status
 
-The Phase 1 implementation is present:
+The core retrieval and enforcement implementation includes:
 
-- MCP server over stdio
-- `record_decision` and `search_decisions`
+- MCP server over stdio with three tools:
+  - `check_proposal`: checks a proposed architectural change against active decisions and returns `CONFLICT` | `RELATED` | `NONE`
+  - `search_decisions`: tokenized keyword retrieval with weighted field relevance ranking
+  - `record_decision`: records what was chosen, rejected alternatives, deciding factors, and revisitation triggers
+- Always-on rule compiler: `ideagit rules` converts active decisions into copy-paste rules for `.cursorrules`, `.cursor/rules/`, or `CLAUDE.md`
 - Markdown files with YAML frontmatter under `.decisions/`
-- Status, scope, search, and supersede support
-- Server instructions that tell the agent to search before structural changes
+- Diagnostic doctor (`ideagit doctor`) for dangling references, schema validity, and contradiction warnings
+- Secret redaction covering API keys (OpenAI, Anthropic, Google), GitHub tokens, JWTs, and connection strings
 
 Experimental capture plumbing is also present:
 
 - Session transcript parsing
-- `claude -p` extraction wrapper
-- Fail-open extraction behavior
-- Pending candidate queue
-- `ideagit review` for accept, skip, edit, and quit
-
-The important limitation is that extraction quality has not yet been proven on
-five hand-labeled real sessions. Treat auto-capture as experimental until the
-The complete usage guide, sample outputs, and workflow specifications are documented in the [User Manual](USER_MANUAL.md).
+- `claude -p` extraction wrapper (fail-open)
+- Pending candidate queue (`.decisions/.pending/`)
+- `ideagit review` interactive CLI
 
 ## Quick start
 
@@ -52,69 +50,79 @@ npm run build
 npm test
 ```
 
-Point an MCP-capable agent at the server, with the working directory set to the
-repository whose decisions it should read:
+### Configure MCP Agent Client
 
+Set `IDEAGIT_CWD` (or `cwd`) to the absolute path of the target repository whose decisions the agent should govern.
+
+#### 1. Claude Code / Windsurf / Cline (`.claude/mcp.json` or `~/.claude/mcp.json`)
 ```json
 {
   "mcpServers": {
     "ideagit": {
       "command": "node",
-      "args": ["/absolute/path/to/ideagit/dist/server.js"]
+      "args": ["/ABSOLUTE/PATH/TO/ideagit/dist/server.js"],
+      "env": {
+        "IDEAGIT_CWD": "/ABSOLUTE/PATH/TO/YOUR/TARGET/REPO"
+      }
     }
   }
 }
 ```
 
-The first workflow to validate is explicit recording:
-
-1. Make a real technical choice between alternatives.
-2. Ask the agent to call `record_decision`.
-3. Later, make a related proposal and observe whether it calls
-   `search_decisions` before acting.
-4. Record whether the result actually changes the proposal.
-
-## Experimental auto-capture
-
-The SessionEnd hook can send a transcript to headless `claude -p`, queue draft
-candidates under `.decisions/.pending/`, and leave them for review. It sends
-nothing until you opt in, per repository:
-
-```bash
-ideagit consent   # shows the disclosure, asks to enable
-npm run review
+#### 2. Cursor (`.cursor/mcp.json` or `~/.cursor/mcp.json`)
+```json
+{
+  "mcpServers": {
+    "ideagit": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/ideagit/dist/server.js"],
+      "env": {
+        "IDEAGIT_CWD": "/ABSOLUTE/PATH/TO/YOUR/TARGET/REPO"
+      }
+    }
+  }
+}
 ```
 
-The hook redacts common secret shapes (API keys, tokens, PEM blocks,
-credentials in connection strings) before the transcript leaves the machine,
-and drops any candidate that still contains one — but redaction is
-best-effort, not a guarantee. Read the privacy guidance in
-[ARCHITECTURE.md](ARCHITECTURE.md) before enabling it. Consent lives in
-`~/.ideagit/consent.json`, not in the repo, so it doesn't travel with `git
-clone`.
+Or run `node bin/ideagit.js init` inside your target project directory to print a pre-filled configuration.
 
-## Decision format
+---
 
-Each record contains:
+## Always-On Rules (Compile-to-Rules)
+
+MCP tools can sometimes be ignored by agents. To enforce decisions unconditionally in Cursor or Claude Code, run:
+
+```bash
+node bin/ideagit.js rules
+```
+
+Copy the generated markdown block directly into your project's `.cursorrules`, `.cursor/rules/decisions.mdc`, or `CLAUDE.md`.
+
+---
+
+## Proving Value (The Two-Week Usage Log)
+
+To validate IdeaGit in a live repository, track interactions in a paper log or local file:
+
+| Date | Unprompted Search / Check Called? (Y/N) | Decision Recalled | Proposal Changed? (Y/N) | Notes |
+|---|---|---|---|---|
+| 2026-08-28 | Y | Rejected Redis for SQLite | Y | Agent suggested SQLite instead of adding Redis |
+
+**Phase 1 Gate (from ROADMAP.md):**
+- 10 useful records in that repository
+- ≥ 2 unprompted searches or proposal checks
+- ≥ 1 proposal changed because of a recorded decision
+
+---
+
+## Decision Format
+
+Each record in `.decisions/*.md` contains:
 
 - The chosen option
-- Alternatives that were actually considered and rejected
-- The real deciding reason
-- What would change the decision
-- File scope and lifecycle status
-- Provenance when available
+- Alternatives that were actually considered and rejected with reasons
+- The real deciding reason (`## Why`)
+- What would change our mind (`## What would change our mind`)
+- File scope glob patterns and lifecycle status
 
-The files remain useful Markdown even if IdeaGit is removed.
-
-## Validation path
-
-Read these in order:
-
-1. [PRD.md](PRD.md) - product thesis, target user, metrics, and kill criteria
-2. [ROADMAP.md](ROADMAP.md) - validation gates and build order
-3. [ARCHITECTURE.md](ARCHITECTURE.md) - storage, MCP surface, trust model, and future design
-4. [PRIVACY.md](PRIVACY.md) - what auto-capture sends, where it goes, and how to delete it
-5. [CLAUDE.md](CLAUDE.md) - condensed context and commands for a coding agent working in this repo
-
-The immediate goal is not to build a graph or hosted service. It is to prove
-that an agent recalls a prior decision and changes its behavior because of it.
+The files remain clean, readable Markdown even if IdeaGit is removed.
