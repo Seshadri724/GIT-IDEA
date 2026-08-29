@@ -52,12 +52,13 @@ test('doctor warns when scope glob matches no files', async () => {
   });
 });
 
-test('doctor detects contradiction between active decisions governing same scope', async () => {
+test('doctor detects contradiction as warning when active decision rejects what another chooses', async () => {
   await withTempRepo(async (dir) => {
     await recordDecision(dir, {
       title: 'Use Postgres for session storage',
       chose: 'Postgres',
       why: 'Single datastore',
+      rejected: [{ name: 'Redis', reason: 'Too expensive to manage' }],
       scope: ['src/session/**'],
     });
 
@@ -70,8 +71,31 @@ test('doctor detects contradiction between active decisions governing same scope
 
     const report = await runDoctor(dir);
     assert.equal(report.totalDecisions, 2);
-    const contradiction = report.issues.find((i) => i.message.includes('Contradiction detected'));
+    const contradiction = report.issues.find((i) => i.message.includes('Contradiction suspected'));
     assert.ok(contradiction);
-    assert.equal(contradiction.severity, 'error');
+    assert.equal(contradiction.severity, 'warning');
+  });
+});
+
+test('doctor does not falsely flag non-conflicting decisions in the same scope', async () => {
+  await withTempRepo(async (dir) => {
+    await recordDecision(dir, {
+      title: 'Configure session token TTL to 30 minutes',
+      chose: '30m expiration',
+      why: 'Security compliance requirement',
+      scope: ['src/session/**'],
+    });
+
+    await recordDecision(dir, {
+      title: 'Use Pino for structured session logging',
+      chose: 'Pino logger',
+      why: 'Fast JSON structured logs',
+      scope: ['src/session/**'],
+    });
+
+    const report = await runDoctor(dir);
+    assert.equal(report.totalDecisions, 2);
+    const contradictions = report.issues.filter((i) => i.message.includes('Contradiction suspected'));
+    assert.equal(contradictions.length, 0);
   });
 });

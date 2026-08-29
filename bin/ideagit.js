@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // `ideagit` — no args / `serve` starts the MCP server over stdio.
 // `review` walks pending candidates queued by hooks/session-end.js.
-// `doctor` / `graph` land in Phase 3-4 (see ROADMAP.md).
+// `rules` compiles active decisions into Cursor / Claude rules.
+// `doctor` / `graph` run diagnostics and graph visualization.
 // `phase0` runs the real-session evaluation required before trusting
 // auto-capture (ROADMAP.md Phase 0) — see src/phase0.ts.
-// `init` prints a ready-to-paste MCP config with the absolute path filled in.
+// `init` prints a ready-to-paste MCP config with cwd / IDEAGIT_CWD filled in.
 
 import { createInterface } from 'node:readline/promises';
 import { spawnSync } from 'node:child_process';
@@ -18,6 +19,7 @@ import { listPending, removePending } from '../dist/pending.js';
 import { hasConsent, grantConsent, revokeConsent, DISCLOSURE } from '../dist/consent.js';
 import { runDoctor } from '../dist/doctor.js';
 import { generateGraph } from '../dist/graph.js';
+import { compileRules } from '../dist/rules.js';
 import { loadSessions, runSessions, evaluateGate, formatSessionForReview } from '../dist/phase0.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -114,6 +116,12 @@ async function review() {
   rl.close();
 }
 
+async function rules() {
+  const cwd = process.cwd();
+  const output = await compileRules(cwd);
+  console.log(output);
+}
+
 async function consent() {
   const cwd = process.cwd();
   const sub = process.argv[3];
@@ -160,7 +168,7 @@ async function doctor() {
   console.log(`\nFound ${report.issues.length} issue(s):\n`);
   let hasError = false;
   for (const issue of report.issues) {
-    const icon = issue.severity === 'error' ? '✖' : '⚠';
+    const icon = issue.severity === 'error' ? '✖' : issue.severity === 'warning' ? '⚠' : 'ℹ';
     if (issue.severity === 'error') hasError = true;
     console.log(`  ${icon} [${issue.decisionId}] ${issue.message}`);
   }
@@ -230,14 +238,28 @@ async function phase0() {
 
 function init() {
   const serverPath = path.resolve(__dirname, '..', 'dist', 'server.js');
-  const config = { mcpServers: { ideagit: { command: 'node', args: [serverPath] } } };
+  const targetRepo = process.cwd();
+  const config = {
+    mcpServers: {
+      ideagit: {
+        command: 'node',
+        args: [serverPath],
+        env: {
+          IDEAGIT_CWD: targetRepo,
+        },
+      },
+    },
+  };
   console.log('Paste this into your agent\'s MCP config (e.g. .claude/mcp.json, ~/.cursor/mcp.json):\n');
   console.log(JSON.stringify(config, null, 2));
-  console.log('\nThen run `ideagit consent` if you want opt-in auto-capture, or just ask your agent to `record_decision`.');
+  console.log(`\nConfigured target repository: ${targetRepo}`);
+  console.log('Run `ideagit rules` to generate always-on system rules from your decisions.');
 }
 
 if (cmd === 'review') {
   await review();
+} else if (cmd === 'rules') {
+  await rules();
 } else if (cmd === 'consent') {
   await consent();
 } else if (cmd === 'doctor') {
@@ -251,6 +273,6 @@ if (cmd === 'review') {
 } else if (cmd === 'serve' || !cmd) {
   await import('../dist/server.js');
 } else {
-  console.error(`Unknown command: ${cmd}\nUsage: ideagit [serve|init|review|consent [status|revoke]|doctor|graph|phase0 [dir]]`);
+  console.error(`Unknown command: ${cmd}\nUsage: ideagit [serve|init|rules|review|consent [status|revoke]|doctor|graph|phase0 [dir]]`);
   process.exitCode = 1;
 }

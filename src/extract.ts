@@ -121,7 +121,7 @@ export async function runExtraction(
       '--json-schema',
       JSON.stringify(CANDIDATE_SCHEMA),
       '--model',
-      opts.model ?? 'claude-opus-5',
+      opts.model ?? process.env.ANTHROPIC_MODEL ?? 'claude-3-7-sonnet-latest',
     ];
 
     const stdout = await new Promise<string>((resolve, reject) => {

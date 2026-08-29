@@ -41,6 +41,7 @@ export interface RecordDecisionInput {
   rejected?: RejectedAlternative[];
   changes_mind?: string;
   scope?: string[];
+  tags?: string[];
   supersedes?: string[];
   provenance?: DecisionProvenance;
 }
@@ -198,7 +199,7 @@ export async function recordDecision(cwd: string, input: RecordDecisionInput): P
     status: 'active',
     date,
     scope: input.scope ?? [],
-    tags: [],
+    tags: input.tags ?? [],
     supersedes: input.supersedes ?? [],
     superseded_by: null,
     provenance: input.provenance,
