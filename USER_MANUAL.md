@@ -1,67 +1,94 @@
 # IdeaGit Reference Manual
 
-IdeaGit is a local, Git-backed decision memory and contradiction detector for MCP-capable coding agents.
+IdeaGit is a local, Git-backed decision memory for MCP-capable coding agents.
 
-## 1. Quick Start
+**Start here for install and the use/test procedure:** [README.md](README.md).  
+**Full case IDs:** [TESTCASES.md](TESTCASES.md).  
+**Live evidence log:** [USAGE_LOG.md](USAGE_LOG.md).
 
-### Build
+Decisions are stored in **the target app** (`IDEAGIT_CWD`), not necessarily the IdeaGit clone.
+
+---
+
+## 1. Build and connect
+
 ```bash
+# In the IdeaGit clone
 npm install
 npm run build
 npm test
+
+# In YOUR_APP (the repo you want governed)
+node /path/to/ideagit/bin/ideagit.js init
 ```
 
-### Configure MCP Client
-Add IdeaGit to your agent's MCP settings (e.g., `.claude/mcp.json`, `~/.cursor/mcp.json`):
+Paste the printed JSON into Cursor (`.cursor/mcp.json`) or Claude MCP config. Required:
 
-```json
-{
-  "mcpServers": {
-    "ideagit": {
-      "command": "node",
-      "args": ["/absolute/path/to/ideagit/dist/server.js"]
-    }
-  }
-}
-```
+- `args` → IdeaGit `dist/server.js`
+- `env.IDEAGIT_CWD` → absolute path of YOUR_APP
+
+Restart the editor. Open YOUR_APP. Confirm tools: `record_decision`, `search_decisions`, `check_proposal`.
+
+Do not run `ideagit consent` on first use.
 
 ---
 
-## 2. MCP Tools
+## 2. MCP tools
 
-IdeaGit exposes two MCP tools over stdio:
+### `check_proposal`
+
+Check a planned change against **all active** rejected alternative names, then search for related records.
+
+- `proposal` (string, required)
+- `scope` (optional): file path — if set, only decisions whose scope glob matches
+- `repo_path` (optional): override root (else `IDEAGIT_CWD` / cwd)
+
+Returns `CONFLICT` | `RELATED` | `NONE`. Rejected **names** should be short (`Redis`, `GraphQL`).
 
 ### `search_decisions`
-- **Purpose**: Query recorded decisions before proposing architectural or dependency changes.
-- **Parameters**:
-  - `query` (string, required): Keywords or proposal description.
-  - `status` (optional): `'active' | 'superseded' | 'abandoned' | 'stale' | 'any'`. Default `'active'`.
-  - `scope` (optional): File path to restrict to matching scope globs.
-  - `repo_path` (optional): Custom repository root path.
+
+Keyword retrieval with whole-token scoring.
+
+- `query` (string): empty query with no `scope` returns no rows (does not dump the log)
+- `status` (optional): `active` | `superseded` | `abandoned` | `stale` | `any` (default `active`)
+- `scope` (optional): file path
+- `repo_path` (optional)
 
 ### `record_decision`
-- **Purpose**: Record a structural technical choice made during a session.
-- **Parameters**:
-  - `title` (string, required): High-level choice.
-  - `chose` (string, required): Detailed decision outcome.
-  - `why` (string, required): Deciding factor / rationale.
-  - `rejected` (array, optional): List of `{ name, reason }` alternatives considered.
-  - `changes_mind` (string, optional): Conditions to revisit the decision.
-  - `scope` (array, optional): Governed file glob patterns.
-  - `tags` (array, optional): Category tags.
-  - `supersedes` (array, optional): IDs of retired decisions.
-  - `provenance` (object, optional): Session ID, commit hash, or source link.
+
+Persist a structural choice. Required: `title`, `chose`, `why`. Optional: `rejected` (`{ name, reason }[]`), `changes_mind`, `scope` (globs), `tags`, `supersedes`, `provenance`, `repo_path`.
 
 ---
 
-## 3. CLI Commands
+## 3. Everyday workflow
+
+1. After a real rejection, ask the agent to `record_decision`.
+2. Confirm `YOUR_APP/.decisions/*.md` exists.
+3. Optional: `node /path/to/ideagit/bin/ideagit.js rules` (cwd = YOUR_APP) and paste into `.cursor/rules/` or `CLAUDE.md`.
+4. Before architecture/dependency work, the agent should `check_proposal` or `search_decisions`.
+
+---
+
+## 4. How to test the product
+
+1. Prompted: record a seed (e.g. reject `Redis` for sessions) → `check_proposal` “Add Redis for session caching” → **CONFLICT**.
+2. **New chat.** Do not name IdeaGit or the tools. Ask to add that rejected option.
+3. Pass = unprompted tool call + plan changes. Fail = implements it with no check.
+4. One real row in `USAGE_LOG.md`. Unprompted Y only if you did not name the tools.
+
+---
+
+## 5. CLI
+
+Run as `node bin/ideagit.js <cmd>` from the clone, with **cwd = YOUR_APP** for commands that read `.decisions/`.
 
 | Command | Description |
 |---|---|
-| `ideagit serve` | Starts the stdio MCP server (default). |
-| `ideagit init` | Outputs a ready-to-paste MCP configuration JSON. |
-| `ideagit doctor` | Validates decision record integrity, references, and contradictions. |
-| `ideagit graph` | Generates a Mermaid flowchart in `.decisions/GRAPH.md`. |
-| `ideagit consent [status\|revoke]` | Manages per-repository auto-capture consent. |
-| `ideagit review` | Interactive prompt to review candidate decisions queued in `.decisions/.pending/`. |
-| `ideagit phase0 [dir]` | Evaluates extraction quality against ground-truth sessions. |
+| `serve` | Stdio MCP server (default). |
+| `init` | Paste-ready MCP JSON with `IDEAGIT_CWD` = current directory. |
+| `rules` | Print always-on Markdown from active decisions (stdout; you paste it). |
+| `doctor` | Structure, dangling refs, contradiction **warnings**. Exit 1 on errors only. |
+| `graph` | Mermaid file at `.decisions/GRAPH.md`. |
+| `consent [status\|revoke]` | Opt-in auto-capture. |
+| `review` | Accept/edit/skip `.decisions/.pending/` candidates. |
+| `phase0 [dir]` | Extractor eval vs hand-labeled sessions (experimental). |

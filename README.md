@@ -1,48 +1,36 @@
 # IdeaGit
 
-**Decision memory and contradiction checker for coding agents.**
+**Decision memory for coding agents** (thesis: they stop re-proposing rejected options).
 
-IdeaGit stores important technical decisions as Markdown inside your repository
-and gives your MCP-capable coding agent tools to search prior decisions and check
-new proposals before suggesting architectural changes.
+IdeaGit stores technical decisions as Markdown in **your application repo** and exposes three MCP tools so an agent can record, search, and check proposals before changing architecture or dependencies.
 
-The product is not an ADR generator. The useful event is this:
+The useful event is:
 
 ```text
 Agent: You are proposing Redis, but this repository rejected Redis for session
        storage because of operational cost. Has that constraint changed?
 ```
 
-## Why it exists
+That event is **not proven** until you see it on a real app. This package is clone-and-build only; it has not been published to npm.
 
-Coding agents remember the current code better than they remember why the code
-became that way. IdeaGit preserves the reasoning behind choices so an agent can
-avoid repeating rejected proposals.
+## Two directories (read this first)
 
-It is local-first, Git-backed, readable without the tool, and vendor-neutral on
-disk.
+| Path | Role |
+|---|---|
+| **IdeaGit clone** (this repo) | Build the server: `dist/server.js` |
+| **Your app** (`YOUR_APP`) | Where `.decisions/` is written. Set `IDEAGIT_CWD` to this path |
 
-## Current status
+If `IDEAGIT_CWD` points at IdeaGit while you edit another project, records land in the wrong tree.
 
-The core retrieval and enforcement implementation includes:
+Do not enable `ideagit consent` (auto-capture) for first use.
 
-- MCP server over stdio with three tools:
-  - `check_proposal`: checks a proposed architectural change against active decisions and returns `CONFLICT` | `RELATED` | `NONE`
-  - `search_decisions`: tokenized keyword retrieval with weighted field relevance ranking
-  - `record_decision`: records what was chosen, rejected alternatives, deciding factors, and revisitation triggers
-- Always-on rule compiler: `ideagit rules` converts active decisions into copy-paste rules for `.cursorrules`, `.cursor/rules/`, or `CLAUDE.md`
-- Markdown files with YAML frontmatter under `.decisions/`
-- Diagnostic doctor (`ideagit doctor`) for dangling references, schema validity, and contradiction warnings
-- Secret redaction covering API keys (OpenAI, Anthropic, Google), GitHub tokens, JWTs, and connection strings
+---
 
-Experimental capture plumbing is also present:
+## Use / test procedure
 
-- Session transcript parsing
-- `claude -p` extraction wrapper (fail-open)
-- Pending candidate queue (`.decisions/.pending/`)
-- `ideagit review` interactive CLI
+### 1. Build the tool (in this repo)
 
-## Quick start
+Needs Node 20+.
 
 ```bash
 npm install
@@ -50,79 +38,101 @@ npm run build
 npm test
 ```
 
-### Configure MCP Agent Client
+If tests fail, stop.
 
-Set `IDEAGIT_CWD` (or `cwd`) to the absolute path of the target repository whose decisions the agent should govern.
-
-#### 1. Claude Code / Windsurf / Cline (`.claude/mcp.json` or `~/.claude/mcp.json`)
-```json
-{
-  "mcpServers": {
-    "ideagit": {
-      "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/ideagit/dist/server.js"],
-      "env": {
-        "IDEAGIT_CWD": "/ABSOLUTE/PATH/TO/YOUR/TARGET/REPO"
-      }
-    }
-  }
-}
-```
-
-#### 2. Cursor (`.cursor/mcp.json` or `~/.cursor/mcp.json`)
-```json
-{
-  "mcpServers": {
-    "ideagit": {
-      "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/ideagit/dist/server.js"],
-      "env": {
-        "IDEAGIT_CWD": "/ABSOLUTE/PATH/TO/YOUR/TARGET/REPO"
-      }
-    }
-  }
-}
-```
-
-Or run `node bin/ideagit.js init` inside your target project directory to print a pre-filled configuration.
-
----
-
-## Always-On Rules (Compile-to-Rules)
-
-MCP tools can sometimes be ignored by agents. To enforce decisions unconditionally in Cursor or Claude Code, run:
+### 2. Generate MCP config **from YOUR_APP**
 
 ```bash
-node bin/ideagit.js rules
+cd /path/to/YOUR_APP
+node /path/to/ideagit/bin/ideagit.js init
 ```
 
-Copy the generated markdown block directly into your project's `.cursorrules`, `.cursor/rules/decisions.mdc`, or `CLAUDE.md`.
+Paste the JSON into:
 
----
+- **Cursor:** `YOUR_APP/.cursor/mcp.json` (or user MCP settings)
+- **Claude Code:** `.claude/mcp.json` or user MCP config
 
-## Proving Value (The Two-Week Usage Log)
+Confirm:
 
-To validate IdeaGit in a live repository, track interactions in a paper log or local file:
+- `args` → `.../ideagit/dist/server.js` (the program)
+- `env.IDEAGIT_CWD` → absolute path of **YOUR_APP** (the decisions)
 
-| Date | Unprompted Search / Check Called? (Y/N) | Decision Recalled | Proposal Changed? (Y/N) | Notes |
-|---|---|---|---|---|
-| 2026-08-28 | Y | Rejected Redis for SQLite | Y | Agent suggested SQLite instead of adding Redis |
+Restart the editor. Open **YOUR_APP** as the workspace. Confirm MCP server `ideagit` is connected with tools `record_decision`, `search_decisions`, `check_proposal`.
 
-**Phase 1 Gate (from ROADMAP.md):**
-- 10 useful records in that repository
+Example shape:
+
+```json
+{
+  "mcpServers": {
+    "ideagit": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/ideagit/dist/server.js"],
+      "env": {
+        "IDEAGIT_CWD": "/ABSOLUTE/PATH/TO/YOUR_APP"
+      }
+    }
+  }
+}
+```
+
+### 3. Everyday use
+
+1. When you reject an option, ask the agent to call `record_decision`. Keep rejected **names short** (`Redis`, not a sentence). Set `scope` to real folders.
+2. Confirm new files appear under `YOUR_APP/.decisions/`, not under the IdeaGit clone.
+3. Optional always-on rules (tools are often skipped):
+
+   ```bash
+   cd /path/to/YOUR_APP
+   node /path/to/ideagit/bin/ideagit.js rules
+   ```
+
+   Paste the output into `.cursor/rules/`, `.cursorrules`, or `CLAUDE.md`.
+4. Commit `.decisions/*.md` with the code they justify.
+
+### 4. Test that it actually works
+
+**Plumbing (prompted — you may name tools):**
+
+- `record_decision` with a seed such as: chose Postgres sessions, rejected name `Redis`, why = cannot operate a second datastore, scope = a glob that exists in YOUR_APP.
+- Then `check_proposal` with `Add Redis for session caching` → expect **CONFLICT**.
+
+**Product (new chat — do not mention IdeaGit, MCP, or tool names):**
+
+> Sessions feel slow. Add Redis for session caching and wire it up.
+
+**Pass:** the agent calls `check_proposal` or `search_decisions` by itself, cites the record, does not silently add Redis.  
+**Fail:** it implements Redis with no check. Log that too — it is a valid result.
+
+Write one **real** row in [`USAGE_LOG.md`](USAGE_LOG.md) (not the italic placeholder). Unprompted = Y only if you did not name the tools.
+
+Case IDs, negatives, and the two-week gate: [`TESTCASES.md`](TESTCASES.md). CLI and tool fields: [`USER_MANUAL.md`](USER_MANUAL.md).
+
+### 5. Two-week Phase 1 gate (same app)
+
+Count records **in YOUR_APP**, not IdeaGit’s own `.decisions/`:
+
+- ≥ 10 useful records
 - ≥ 2 unprompted searches or proposal checks
-- ≥ 1 proposal changed because of a recorded decision
+- ≥ 1 proposal changed because of a record
 
 ---
 
-## Decision Format
+## What ships
 
-Each record in `.decisions/*.md` contains:
+- MCP stdio: `check_proposal` (`CONFLICT` | `RELATED` | `NONE`), `search_decisions`, `record_decision`
+- `ideagit rules` — copy-paste constraints for Cursor / Claude
+- `.decisions/*.md` — Markdown + YAML; readable if IdeaGit is removed
+- `ideagit doctor` — structure, dangling refs, contradiction **warnings**
+- Experimental opt-in capture: SessionEnd + `claude -p` + `ideagit review` (see [`PRIVACY.md`](PRIVACY.md))
 
-- The chosen option
-- Alternatives that were actually considered and rejected with reasons
-- The real deciding reason (`## Why`)
-- What would change our mind (`## What would change our mind`)
-- File scope glob patterns and lifecycle status
+## Decision format
 
-The files remain clean, readable Markdown even if IdeaGit is removed.
+Each `.decisions/*.md` record: chosen option, rejected alternatives (short names), `## Why`, what would change our mind, file scope, status.
+
+## More
+
+1. [PRD.md](PRD.md) — thesis, kill criteria  
+2. [ROADMAP.md](ROADMAP.md) — validation gates  
+3. [ARCHITECTURE.md](ARCHITECTURE.md) — storage, tools, trust  
+4. [PRIVACY.md](PRIVACY.md) — auto-capture  
+5. [CLAUDE.md](CLAUDE.md) — working on **this** repo as a contributor  
