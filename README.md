@@ -135,4 +135,9 @@ Each `.decisions/*.md` record: chosen option, rejected alternatives (short names
 2. [ROADMAP.md](ROADMAP.md) — validation gates  
 3. [ARCHITECTURE.md](ARCHITECTURE.md) — storage, tools, trust  
 4. [PRIVACY.md](PRIVACY.md) — auto-capture  
-5. [CLAUDE.md](CLAUDE.md) — working on **this** repo as a contributor  
+5. [CLAUDE.md](CLAUDE.md) — working on **this** repo as a contributor
+
+## Manuals
+
+- [Manual for users](MANUAL_FOR_USERS.md) — install, configure, and use IdeaGit
+- [Manual for beta testers](MANUAL_FOR_BETA_TESTERS.md) — test IdeaGit in a real application repository
