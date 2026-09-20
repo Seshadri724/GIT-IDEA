@@ -129,15 +129,8 @@ Count records **in YOUR_APP**, not IdeaGit’s own `.decisions/`:
 
 Each `.decisions/*.md` record: chosen option, rejected alternatives (short names), `## Why`, what would change our mind, file scope, status.
 
-## More
-
-1. [PRD.md](PRD.md) — thesis, kill criteria  
-2. [ROADMAP.md](ROADMAP.md) — validation gates  
-3. [ARCHITECTURE.md](ARCHITECTURE.md) — storage, tools, trust  
-4. [PRIVACY.md](PRIVACY.md) — auto-capture  
-5. [CLAUDE.md](CLAUDE.md) — working on **this** repo as a contributor
-
 ## Manuals
 
 - [Manual for users](MANUAL_FOR_USERS.md) — install, configure, and use IdeaGit
 - [Manual for beta testers](MANUAL_FOR_BETA_TESTERS.md) — test IdeaGit in a real application repository
+
