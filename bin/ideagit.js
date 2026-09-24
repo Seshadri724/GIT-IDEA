@@ -250,8 +250,9 @@ function init() {
       },
     },
   };
-  console.log('Paste this into your agent\'s MCP config (e.g. .claude/mcp.json, ~/.cursor/mcp.json):\n');
+  console.log('Paste this into your agent\'s MCP config (Claude Code: YOUR_APP/.mcp.json; Cursor: YOUR_APP/.cursor/mcp.json):\n');
   console.log(JSON.stringify(config, null, 2));
+  console.log(`\nClaude Code one-liner instead of pasting:\n  claude mcp add ideagit -e IDEAGIT_CWD="${targetRepo}" -- node "${serverPath}"`);
   console.log(`\nConfigured target repository: ${targetRepo}`);
   console.log('Run `ideagit rules` to generate always-on system rules from your decisions.');
 }

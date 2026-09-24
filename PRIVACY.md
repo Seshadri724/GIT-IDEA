@@ -4,11 +4,11 @@ IdeaGit is local-first. There is no IdeaGit server, no account, and no
 telemetry. Two features handle data differently — read the one that applies
 to you.
 
-## `record_decision` / `search_decisions` (the MCP server)
+## `record_decision` / `search_decisions` / `check_proposal` (the MCP server)
 
 Everything stays on this machine and in this repository. Decision records are
 plain Markdown files under `.decisions/`, written and read by the local MCP
-server process. Nothing is sent anywhere by these two tools. If you commit
+server process. Nothing is sent anywhere by these three tools. If you commit
 `.decisions/` to Git, its contents travel wherever that repository goes —
 same as any other file you commit.
 

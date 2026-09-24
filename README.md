@@ -50,7 +50,11 @@ node /path/to/ideagit/bin/ideagit.js init
 Paste the JSON into:
 
 - **Cursor:** `YOUR_APP/.cursor/mcp.json` (or user MCP settings)
-- **Claude Code:** `.claude/mcp.json` or user MCP config
+- **Claude Code:** `YOUR_APP/.mcp.json`, or skip pasting and run the one-liner `init` also prints:
+
+  ```bash
+  claude mcp add ideagit -e IDEAGIT_CWD=/ABSOLUTE/PATH/TO/YOUR_APP -- node /ABSOLUTE/PATH/TO/ideagit/dist/server.js
+  ```
 
 Confirm:
 

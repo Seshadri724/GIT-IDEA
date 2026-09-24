@@ -17,7 +17,7 @@ In particular: **Coding agents remember existing code, but forget why rejected a
 
 IdeaGit provides:
 1. **Human-Readable Markdown Records**: Stored in `.decisions/*.md` in Git. Survives even if IdeaGit is uninstalled.
-2. **MCP Retrieval**: Two tools (`record_decision`, `search_decisions`) that allow coding agents to query historical decisions before proposing architectural or dependency changes.
+2. **MCP Retrieval**: Three tools (`record_decision`, `search_decisions`, `check_proposal`) that allow coding agents to query historical decisions before proposing architectural or dependency changes.
 3. **Structured Trade-offs**: Every record captures:
    - What was chosen
    - What was rejected and why

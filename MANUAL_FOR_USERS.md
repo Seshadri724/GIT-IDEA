@@ -53,10 +53,16 @@ Cursor commonly uses:
 YOUR_APP/.cursor/mcp.json
 ```
 
-Claude Code commonly uses:
+Claude Code uses `.mcp.json` at the app repo root:
 
 ```text
-YOUR_APP/.claude/mcp.json
+YOUR_APP/.mcp.json
+```
+
+Or register it with one command instead of pasting (`init` prints this with your paths filled in):
+
+```bash
+claude mcp add ideagit -e IDEAGIT_CWD=/absolute/path/to/YOUR_APP -- node /absolute/path/to/ideagit/dist/server.js
 ```
 
 The generated configuration should look like this:

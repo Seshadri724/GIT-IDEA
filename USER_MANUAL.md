@@ -22,7 +22,7 @@ npm test
 node /path/to/ideagit/bin/ideagit.js init
 ```
 
-Paste the printed JSON into Cursor (`.cursor/mcp.json`) or Claude MCP config. Required:
+Paste the printed JSON into Cursor (`.cursor/mcp.json`) or Claude Code (`.mcp.json` at the app root, or the `claude mcp add` line `init` prints). Required:
 
 - `args` → IdeaGit `dist/server.js`
 - `env.IDEAGIT_CWD` → absolute path of YOUR_APP

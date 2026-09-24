@@ -77,7 +77,7 @@ cd YOUR_APP
 node <GITIDEA>\bin\ideagit.js init
 ```
 
-Paste output into `YOUR_APP\.cursor\mcp.json` (or Claude MCP config). Restart the editor. Open **YOUR_APP** as the workspace.
+Paste output into `YOUR_APP\.cursor\mcp.json` (Claude Code: `YOUR_APP\.mcp.json`, or the `claude mcp add` line `init` prints). Restart the editor. Open **YOUR_APP** as the workspace.
 
 | ID | Preconditions | Steps | Expected | Result |
 |---|---|---|---|---|
