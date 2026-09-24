@@ -13,5 +13,5 @@ const args = ['--test', ...testFiles, ...extraArgs];
 
 const child = spawn(process.execPath, args, { stdio: 'inherit' });
 child.on('exit', (code) => {
-  process.exit(code ?? 0);
+  process.exit(code ?? 1); // null = killed by signal, never a pass
 });
