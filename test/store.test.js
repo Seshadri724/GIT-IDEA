@@ -152,3 +152,14 @@ test('listDecisions on a repo with no .decisions/ dir returns an empty array', a
     assert.deepEqual(await listDecisions(dir), []);
   });
 });
+
+test('ids with path separators are rejected, not read or written', async () => {
+  await withTempRepo(async (dir) => {
+    assert.equal(await getDecision(dir, '../outside'), null);
+    await assert.rejects(
+      recordDecision(dir, { title: 'x', chose: 'x', why: 'x', supersedes: ['../../evil'] }),
+      /Invalid supersedes id/,
+    );
+    assert.deepEqual(await listDecisions(dir), []); // nothing written before the throw
+  });
+});

@@ -12,6 +12,10 @@ server process. Nothing is sent anywhere by these two tools. If you commit
 `.decisions/` to Git, its contents travel wherever that repository goes —
 same as any other file you commit.
 
+## Local call log
+
+The MCP server appends each tool call (time, repo path, tool name, query text) to `~/.ideagit/calls.log` on your machine, as evidence for the usage log. It is never sent anywhere and never written into the repo. Delete the file at any time.
+
 ## Opt-in auto-capture (`ideagit consent`, the SessionEnd hook)
 
 This is the only feature that sends anything off your machine, and it is off

@@ -18,6 +18,10 @@ To pass Phase 1 (proving retrieval changes agent behavior in a real repo):
 
 ---
 
+## Evidence source
+
+The MCP server appends one tab-separated line per tool call to `~/.ideagit/calls.log`: timestamp, repo, tool, and the verdict/result count plus query. Fill the **Unprompted Check?** column by comparing that log with the chat: a call with no user request for it in that turn counts as unprompted.
+
 ## Guidelines for Recording
 1. **Concise Rejected Names**: When recording decisions via `record_decision`, keep rejected alternative names concise (e.g. `Redis`, `GraphQL`, `Prisma`, `Tailwind`) rather than full sentences, so token matching is reliable.
 2. **Track Honesty**: Only log "Y" for unprompted check if the agent called `check_proposal` or `search_decisions` without being explicitly prompted in that chat turn.

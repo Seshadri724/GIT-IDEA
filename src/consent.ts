@@ -25,20 +25,28 @@ async function writeAll(data: Record<string, boolean>): Promise<void> {
   await fs.writeFile(file, JSON.stringify(data, null, 2), 'utf8');
 }
 
+// Windows paths are case-insensitive, and the hook's cwd can differ in drive
+// letter case from the shell where `ideagit consent` ran.
+function repoKey(cwd: string): string {
+  const p = path.resolve(cwd);
+  return process.platform === 'win32' ? p.toLowerCase() : p;
+}
+
 export async function hasConsent(cwd: string): Promise<boolean> {
   const data = await readAll();
-  return data[path.resolve(cwd)] === true;
+  return data[repoKey(cwd)] === true;
 }
 
 export async function grantConsent(cwd: string): Promise<void> {
   const data = await readAll();
-  data[path.resolve(cwd)] = true;
+  data[repoKey(cwd)] = true;
   await writeAll(data);
 }
 
 export async function revokeConsent(cwd: string): Promise<void> {
   const data = await readAll();
-  delete data[path.resolve(cwd)];
+  delete data[repoKey(cwd)];
+  delete data[path.resolve(cwd)]; // pre-normalization key
   await writeAll(data);
 }
 

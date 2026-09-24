@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { withTempRepo } from './helpers.js';
-import { recordDecision } from '../dist/store.js';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { recordDecision, listDecisions } from '../dist/store.js';
 import { runDoctor } from '../dist/doctor.js';
 
 test('doctor reports healthy status for valid decisions', async () => {
@@ -97,5 +99,15 @@ test('doctor does not falsely flag non-conflicting decisions in the same scope',
     assert.equal(report.totalDecisions, 2);
     const contradictions = report.issues.filter((i) => i.message.includes('Contradiction suspected'));
     assert.equal(contradictions.length, 0);
+  });
+});
+
+test('an unparseable record is skipped by search and reported by doctor', async () => {
+  await withTempRepo(async (dir) => {
+    await recordDecision(dir, { title: 'Use Postgres', chose: 'Postgres', why: 'Already run it.' });
+    await writeFile(path.join(dir, '.decisions', 'broken.md'), '---\ntitle: [unclosed\n---\n', 'utf8');
+    assert.equal((await listDecisions(dir)).length, 1);
+    const report = await runDoctor(dir);
+    assert.ok(report.issues.some((i) => i.decisionId === 'broken' && i.severity === 'error'));
   });
 });

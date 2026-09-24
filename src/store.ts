@@ -162,7 +162,16 @@ async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
 }
 
+// Ids arrive from agents (supersedes) and edited candidates; anything with a
+// path separator could read or overwrite files outside .decisions/.
+const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+export function isValidId(id: string): boolean {
+  return ID_RE.test(id);
+}
+
 async function filePath(cwd: string, id: string): Promise<string> {
+  if (!isValidId(id)) throw new Error(`Invalid decision id: ${JSON.stringify(id)}`);
   return path.join(decisionsDir(cwd), `${id}.md`);
 }
 
@@ -186,6 +195,9 @@ async function uniqueId(cwd: string, base: string): Promise<string> {
 }
 
 export async function recordDecision(cwd: string, input: RecordDecisionInput): Promise<string> {
+  for (const oldId of input.supersedes ?? []) {
+    if (!isValidId(oldId)) throw new Error(`Invalid supersedes id: ${JSON.stringify(oldId)}`);
+  }
   const dir = decisionsDir(cwd);
   await ensureDir(dir);
 
@@ -223,13 +235,20 @@ export async function recordDecision(cwd: string, input: RecordDecisionInput): P
 }
 
 export async function getDecision(cwd: string, id: string): Promise<Decision | null> {
+  if (!isValidId(id)) return null;
   const p = await filePath(cwd, id);
   if (!(await exists(p))) return null;
   const raw = await fs.readFile(p, 'utf8');
   return toDecision(id, raw);
 }
 
-export async function listDecisions(cwd: string): Promise<Decision[]> {
+// A record that fails to parse is skipped, not fatal: one bad hand-edit must
+// not take down search and check_proposal for the whole repo. `doctor` passes
+// onError to report it.
+export async function listDecisions(
+  cwd: string,
+  onError?: (id: string, err: Error) => void,
+): Promise<Decision[]> {
   const dir = decisionsDir(cwd);
   if (!(await exists(dir))) return [];
 
@@ -237,12 +256,18 @@ export async function listDecisions(cwd: string): Promise<Decision[]> {
   const decisions = await Promise.all(
     files.map(async (f) => {
       const id = f.slice(0, -3);
-      const raw = await fs.readFile(path.join(dir, f), 'utf8');
-      return toDecision(id, raw);
+      try {
+        return toDecision(id, await fs.readFile(path.join(dir, f), 'utf8'));
+      } catch (err) {
+        onError?.(id, err as Error);
+        return null;
+      }
     }),
   );
 
-  return decisions.sort((a, b) => b.date.localeCompare(a.date));
+  return decisions
+    .filter((d): d is Decision => d !== null)
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 // Exported for tests that need to assert on the fixed heading set.

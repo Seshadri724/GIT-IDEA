@@ -4,6 +4,9 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
+import { appendFile, mkdir } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { recordDecision, Decision } from './store.js';
 import { searchDecisions } from './search.js';
 import { checkProposal } from './proposal.js';
@@ -24,6 +27,21 @@ result is stale or superseded, state that clearly rather than presenting it as a
 After a session where a real structural technical decision was made — a choice between
 real alternatives that someone could plausibly propose again — call record_decision to persist it.
 Skip routine bug fixes, trivial refactors, and anything where no viable alternative was considered.`;
+
+// Local evidence for the Phase 1 gate (ROADMAP.md): one line per tool call, so
+// "did the agent check unprompted?" is read from a log instead of memory.
+// Lives under ~/.ideagit/, never in the repo. Fails open.
+export const CALL_LOG = path.join(os.homedir(), '.ideagit', 'calls.log');
+
+async function logCall(cwd: string, tool: string, detail: string): Promise<void> {
+  try {
+    await mkdir(path.dirname(CALL_LOG), { recursive: true });
+    const line = [new Date().toISOString(), path.resolve(cwd), tool, detail.replace(/\s+/g, ' ').slice(0, 300)];
+    await appendFile(CALL_LOG, line.join('\t') + '\n', 'utf8');
+  } catch {
+    // Logging must never break a tool call.
+  }
+}
 
 function formatDecision(d: Decision): string {
   const lines = [`# ${d.title}`, ``, `id: ${d.id}  ·  status: ${d.status}  ·  date: ${d.date}`];
@@ -72,6 +90,7 @@ serveStdio(() => {
       const { repo_path, ...opts } = input;
       const cwd = getTargetCwd(repo_path);
       const result = await checkProposal(cwd, opts);
+      await logCall(cwd, 'check_proposal', `${result.verdict} ${opts.proposal}`);
       return {
         content: [
           {
@@ -132,6 +151,7 @@ serveStdio(() => {
       const { repo_path, ...data } = input;
       const cwd = getTargetCwd(repo_path);
       const id = await recordDecision(cwd, data);
+      await logCall(cwd, 'record_decision', id);
       return { content: [{ type: 'text', text: `Recorded decision ${id}` }] };
     },
   );
@@ -163,6 +183,7 @@ serveStdio(() => {
       const { repo_path, ...opts } = input;
       const cwd = getTargetCwd(repo_path);
       const results = await searchDecisions(cwd, opts);
+      await logCall(cwd, 'search_decisions', `${results.length} ${opts.query}`);
 
       if (results.length === 0) {
         return { content: [{ type: 'text', text: 'No matching decisions found.' }] };

@@ -181,6 +181,17 @@ Read [`PRIVACY.md`](PRIVACY.md) before running:
 node /absolute/path/to/ideagit/bin/ideagit.js consent
 ```
 
+Consent alone does nothing until the SessionEnd hook is registered. Add it to the app repo's `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionEnd": [{ "hooks": [{ "type": "command",
+      "command": "node /absolute/path/to/ideagit/hooks/session-end.js" }] }]
+  }
+}
+```
+
 Candidates are placed in `.decisions/.pending/` and require human review. They are not written as accepted decisions automatically.
 
 ## Troubleshooting

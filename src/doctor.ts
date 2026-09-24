@@ -99,8 +99,10 @@ function isContradiction(a: Decision, b: Decision): string | null {
 }
 
 export async function runDoctor(cwd: string): Promise<DoctorReport> {
-  const decisions = await listDecisions(cwd);
   const issues: DoctorIssue[] = [];
+  const decisions = await listDecisions(cwd, (id, err) => {
+    issues.push({ severity: 'error', decisionId: id, message: `Unparseable record: ${err.message.split('\n')[0]}` });
+  });
   const repoFiles = await getRepoFiles(cwd);
   const decisionIds = new Set(decisions.map((d) => d.id));
 
